@@ -25,9 +25,9 @@ class HookSupport {
         executeHooksUnchecked(flagValueType, hooks, hook -> hook.after(hookContext, details, hints));
     }
 
-    public void afterAllHooks(FlagValueType flagValueType, HookContext hookCtx, FlagEvaluationDetails details,
-                              List<Hook> hooks, Map<String, Object> hints) {
-        executeHooks(flagValueType, hooks, "finally", hook -> hook.finallyAfter(hookCtx, details, hints));
+    public void afterAllHooks(FlagValueType flagValueType, HookContext hookCtx, List<Hook> hooks,
+            Map<String, Object> hints) {
+        executeHooks(flagValueType, hooks, "finally", hook -> hook.finallyAfter(hookCtx, hints));
     }
 
     public void errorHooks(FlagValueType flagValueType, HookContext hookCtx, Exception e, List<Hook> hooks,
@@ -72,7 +72,7 @@ class HookSupport {
     }
 
     private EvaluationContext callBeforeHooks(FlagValueType flagValueType, HookContext hookCtx,
-            List<Hook> hooks, Map<String, Object> hints) {
+                                              List<Hook> hooks, Map<String, Object> hints) {
         // These traverse backwards from normal.
         List<Hook> reversedHooks = new ArrayList<>(hooks);
         Collections.reverse(reversedHooks);
