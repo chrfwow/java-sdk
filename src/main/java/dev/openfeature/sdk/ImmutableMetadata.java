@@ -117,6 +117,15 @@ public class ImmutableMetadata {
         }
 
         /**
+         * Adds all values of the metadata object to the builder. Existing values will be overwritten.
+         * @param metadata metadata values to add
+         */
+        public ImmutableMetadataBuilder addMetadata(ImmutableMetadata metadata) {
+            this.metadata.putAll(metadata.metadata);
+            return this;
+        }
+
+        /**
          * Add String value to the metadata.
          *
          * @param key   flag metadata key to add
