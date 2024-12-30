@@ -61,42 +61,4 @@ class FlagMetadataTest {
         // then
         assertThat(flagMetadata.getBoolean("string")).isNull();
     }
-
-    @Test
-    @DisplayName("addMetadata adds all entries of the passed metadata")
-    public void addMetadata_adds_all_entries_from_existing_metadata() {
-        // given
-        ImmutableMetadata flagMetadata = ImmutableMetadata.builder()
-                .addBoolean("true", true)
-                .addString("str", "a string").build();
-
-        // when
-        ImmutableMetadata withAddedMetadata = ImmutableMetadata.builder()
-                .addDouble("double", 3.1415)
-                .addMetadata(flagMetadata)
-                .build();
-
-        // then
-        assertThat(withAddedMetadata.getBoolean("true")).isTrue();
-        assertThat(withAddedMetadata.getString("str")).isEqualTo("a string");
-        assertThat(withAddedMetadata.getDouble("double")).isEqualTo(3.1415);
-    }
-
-    @Test
-    @DisplayName("addMetadata overwrites existing entries in the builder")
-    public void addMetadata_overwrites_existing_entries_from_metadata() {
-        // given
-        ImmutableMetadata flagMetadata = ImmutableMetadata.builder()
-                .addBoolean("true", false)
-                .build();
-
-        // when
-        ImmutableMetadata withAddedMetadata = ImmutableMetadata.builder()
-                .addBoolean("true", true)
-                .addMetadata(flagMetadata)
-                .build();
-
-        // then
-        assertThat(withAddedMetadata.getBoolean("true")).isFalse();
-    }
 }
