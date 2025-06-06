@@ -137,7 +137,7 @@ public class OpenFeatureClient implements Client {
     @Override
     public List<Hook> getHooks() {
         try (AutoCloseableLock __ = this.hooksLock.readLockAutoCloseable()) {
-            return this.clientHooks;
+            return new ArrayList<>(this.clientHooks);
         }
     }
 
@@ -180,7 +180,7 @@ public class OpenFeatureClient implements Client {
             ProviderState state = stateManager.getState();
 
             mergedHooks = ObjectUtils.merge(
-                    provider.getProviderHooks(), flagOptions.getHooks(), clientHooks, openfeatureApi.getHooks());
+                    provider.getProviderHooks(), flagOptions.getHooks(), getHooks(), openfeatureApi.getHooks());
 
             EvaluationContext mergedCtx = hookSupport.beforeHooks(
                     type,
