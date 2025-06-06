@@ -180,7 +180,7 @@ public class OpenFeatureClient implements Client {
             ProviderState state = stateManager.getState();
 
             mergedHooks = ObjectUtils.merge(
-                    provider.getProviderHooks(), flagOptions.getHooks(), getHooks(), openfeatureApi.getHooks());
+                    provider.getProviderHooks(), flagOptions.getHooks(), clientHooks, openfeatureApi.getHooks());
 
             EvaluationContext mergedCtx = hookSupport.beforeHooks(
                     type,

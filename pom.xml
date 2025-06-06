@@ -217,6 +217,13 @@
                 <scope>import</scope>
             </dependency>
 
+            <dependency>
+                <groupId>com.vmlens</groupId>
+                <artifactId>api</artifactId>
+                <version>1.2.2</version>
+                <scope>test</scope>
+            </dependency>
+
         </dependencies>
     </dependencyManagement>
 
@@ -308,7 +315,19 @@
                     </archive>
                 </configuration>
             </plugin>
-
+            <plugin>
+                <groupId>com.vmlens</groupId>
+                <artifactId>vmlens-maven-plugin</artifactId>
+                <version>1.2.2</version>
+                <executions>
+                    <execution>
+                        <id>test</id>
+                        <goals>
+                            <goal>test</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
         </plugins>
     </build>
 
@@ -337,7 +356,8 @@
                                 <ignoredUnusedDeclaredDependency>com.github.spotbugs:*</ignoredUnusedDeclaredDependency>
                                 <ignoredUnusedDeclaredDependency>org.junit*</ignoredUnusedDeclaredDependency>
                                 <ignoredUnusedDeclaredDependency>com.tngtech.archunit*</ignoredUnusedDeclaredDependency>
-                                <ignoredUnusedDeclaredDependency>org.simplify4u:slf4j2-mock*</ignoredUnusedDeclaredDependency>
+                                <ignoredUnusedDeclaredDependency>org.simplify4u:slf4j2-mock*
+                                </ignoredUnusedDeclaredDependency>
                             </ignoredUnusedDeclaredDependencies>
                             <ignoredDependencies>
                                 <ignoredDependency>com.google.guava*</ignoredDependency>

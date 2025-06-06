@@ -2,16 +2,24 @@ package dev.openfeature.sdk;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 
+import com.vmlens.api.AllInterleavings;
 import dev.openfeature.sdk.exceptions.FatalError;
 import dev.openfeature.sdk.fixtures.HookFixtures;
+import dev.openfeature.sdk.providers.memory.Flag;
+import dev.openfeature.sdk.providers.memory.InMemoryProvider;
 import dev.openfeature.sdk.testutils.TestEventsProvider;
+import java.util.ConcurrentModificationException;
 import java.util.HashMap;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -103,5 +111,62 @@ class OpenFeatureClientTest implements HookFixtures {
         FlagEvaluationDetails<Boolean> details = client.getBooleanDetails("key", true);
 
         assertThat(details.getErrorCode()).isEqualTo(ErrorCode.PROVIDER_NOT_READY);
+    }
+
+    private int j = 0;
+
+    @Test
+    public void testUpdate() throws InterruptedException {
+        OpenFeatureAPI api = new OpenFeatureAPI();
+
+        var flags = new HashMap<String, Flag<?>>();
+        flags.put("a", Flag.builder().variant("a", "def").defaultVariant("a").build());
+        flags.put("b", Flag.builder().variant("a", "as").defaultVariant("a").build());
+        flags.put("c", Flag.builder().variant("a", "dfs").defaultVariant("a").build());
+        flags.put("d", Flag.builder().variant("a", "asddd").defaultVariant("a").build());
+        api.setProviderAndWait(new InMemoryProvider(flags));
+
+        try (AllInterleavings allInterleavings = new AllInterleavings("Concurrent evaluations and hook additions")) {
+            while (allInterleavings.hasNext()) {
+                var latch = new CountDownLatch(1);
+                var client = api.getClient();
+                var readyLatch = new CountDownLatch(2);
+                var concurrentModException = new AtomicReference<ConcurrentModificationException>();
+                Thread eval = new Thread(() -> {
+                    readyLatch.countDown();
+                    try {
+                        latch.await();
+                    } catch (InterruptedException ignored) {
+                    }
+                    try {
+                        client.getStringValue("a", "a");
+                        client.getStringValue("b", "a");
+                        client.getStringValue("c", "a");
+                        client.getStringValue("d", "a");
+                    } catch (ConcurrentModificationException e) {
+                        concurrentModException.set(e);
+                    }
+                });
+                Thread hookAdder = new Thread(() -> {
+                    readyLatch.countDown();
+                    try {
+                        latch.await();
+                    } catch (InterruptedException ignored) {
+                    }
+                    try {
+                        client.addHooks(new Hook() {});
+                    } catch (ConcurrentModificationException e) {
+                        concurrentModException.set(e);
+                    }
+                });
+                eval.start();
+                hookAdder.start();
+                readyLatch.await();
+                latch.countDown();
+                eval.join();
+                hookAdder.join();
+                assertNotNull(concurrentModException.get());
+            }
+        }
     }
 }
