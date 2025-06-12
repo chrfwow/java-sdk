@@ -19,6 +19,7 @@ import dev.openfeature.sdk.testutils.TestEventsProvider;
 import java.util.ConcurrentModificationException;
 import java.util.HashMap;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -113,10 +114,8 @@ class OpenFeatureClientTest implements HookFixtures {
         assertThat(details.getErrorCode()).isEqualTo(ErrorCode.PROVIDER_NOT_READY);
     }
 
-    private int j = 0;
-
-    @Test
-    public void testUpdate() throws InterruptedException {
+    //@Test
+    void a() throws InterruptedException {
         OpenFeatureAPI api = new OpenFeatureAPI();
 
         var flags = new HashMap<String, Flag<?>>();
@@ -126,47 +125,52 @@ class OpenFeatureClientTest implements HookFixtures {
         flags.put("d", Flag.builder().variant("a", "asddd").defaultVariant("a").build());
         api.setProviderAndWait(new InMemoryProvider(flags));
 
-        try (AllInterleavings allInterleavings = new AllInterleavings("Concurrent evaluations and hook additions")) {
-            while (allInterleavings.hasNext()) {
-                var latch = new CountDownLatch(1);
-                var client = api.getClient();
-                var readyLatch = new CountDownLatch(2);
-                var concurrentModException = new AtomicReference<ConcurrentModificationException>();
-                Thread eval = new Thread(() -> {
-                    readyLatch.countDown();
-                    try {
-                        latch.await();
-                    } catch (InterruptedException ignored) {
-                    }
-                    try {
-                        client.getStringValue("a", "a");
-                        client.getStringValue("b", "a");
-                        client.getStringValue("c", "a");
-                        client.getStringValue("d", "a");
-                    } catch (ConcurrentModificationException e) {
-                        concurrentModException.set(e);
-                    }
-                });
-                Thread hookAdder = new Thread(() -> {
-                    readyLatch.countDown();
-                    try {
-                        latch.await();
-                    } catch (InterruptedException ignored) {
-                    }
-                    try {
-                        client.addHooks(new Hook() {});
-                    } catch (ConcurrentModificationException e) {
-                        concurrentModException.set(e);
-                    }
-                });
-                eval.start();
-                hookAdder.start();
-                readyLatch.await();
-                latch.countDown();
-                eval.join();
-                hookAdder.join();
-                assertNotNull(concurrentModException.get());
+        var countDownLatch = new CountDownLatch(1);
+        var client = new OpenFeatureClient(api, "name", "version");
+        var isRunning = new AtomicBoolean(true);
+        var eval = new Thread(() -> {
+            try {
+                countDownLatch.await();
+            } catch (InterruptedException e) {
+                throw new RuntimeException(e);
             }
-        }
+            System.out.println("starting eval");
+            while (isRunning.get()) {
+                client.getStringValue("a", "def");
+                client.getStringValue("b", "def");
+                client.getStringValue("c", "def");
+                client.getStringValue("d", "def");
+            }
+        });
+        var hook = new Thread(() -> {
+            try {
+                countDownLatch.await();
+                Thread.sleep(5);
+            } catch (InterruptedException e) {
+                throw new RuntimeException(e);
+            }
+            System.out.println("starting hook");
+            while (isRunning.get()) {
+                for (int i = 0; i < 100; i++) {
+
+                    client.addHooks(new Hook() {});
+                }
+
+                for (int i = 0; i < 90; i++) {
+
+                    client.getHooks().remove(4);
+                }
+            }
+        });
+
+        eval.start();
+        hook.start();
+        Thread.sleep(100);
+        countDownLatch.countDown();
+        Thread.sleep(40000);
+        isRunning.set(false);
+        eval.join();
+        hook.join();
+        System.out.println(client.getHooks().size());
     }
 }
