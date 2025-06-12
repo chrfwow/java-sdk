@@ -37,7 +37,7 @@ public class VmLensTest {
                     public void run() {
                         firstReady.wakeup();
                         client.getStringValue("a", "a");
-                       // client.getStringValue("a", "a");
+                        client.getStringValue("a", "a");
                     }
                 };
 
@@ -45,7 +45,7 @@ public class VmLensTest {
                 firstReady.await();
 
                 client.addHooks(new Hook() {});
-              //  client.addHooks(new Hook() {});
+                client.addHooks(new Hook() {});
 
                 first.join();
             }
@@ -55,6 +55,6 @@ public class VmLensTest {
         System.out.println("jaVar = " + jaVar);
 
         Thread.sleep(5000);
-        //System.exit(0);
+        System.exit(0);
     }
 }
