@@ -32,12 +32,12 @@ public class VmLensTest {
                 c.incrementAndGet();
                 var client = api.getClient();
                 var firstReady = new Awaitable();
-                Thread first = new Thread() {
+                Thread first = new Thread("test thread") {
                     @Override
                     public void run() {
                         firstReady.wakeup();
                         client.getStringValue("a", "a");
-                        client.getStringValue("a", "a");
+                        //client.getStringValue("a", "a");
                     }
                 };
 
@@ -45,16 +45,18 @@ public class VmLensTest {
                 firstReady.await();
 
                 client.addHooks(new Hook() {});
-                client.addHooks(new Hook() {});
+                //client.addHooks(new Hook() {});
 
                 first.join();
             }
         }
 
+        api.shutdown();
+
         System.out.println("c = " + c);
         System.out.println("jaVar = " + jaVar);
 
-        Thread.sleep(5000);
-        System.exit(0);
+        //Thread.sleep(5000);
+        //System.exit(0);
     }
 }
