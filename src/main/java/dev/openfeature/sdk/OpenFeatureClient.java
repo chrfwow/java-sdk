@@ -30,11 +30,11 @@ import lombok.extern.slf4j.Slf4j;
  */
 @Slf4j
 @SuppressWarnings({
-        "PMD.DataflowAnomalyAnalysis",
-        "PMD.BeanMembersShouldSerialize",
-        "PMD.UnusedLocalVariable",
-        "unchecked",
-        "rawtypes"
+    "PMD.DataflowAnomalyAnalysis",
+    "PMD.BeanMembersShouldSerialize",
+    "PMD.UnusedLocalVariable",
+    "unchecked",
+    "rawtypes"
 })
 @Deprecated() // TODO: eventually we will make this non-public. See issue #872
 public class OpenFeatureClient implements Client {
@@ -146,36 +146,60 @@ public class OpenFeatureClient implements Client {
     }
 
 
-    private final AtomicReference<ApiClientContextKey> key = new AtomicReference<>();
+    private final AtomicReference<ApiTransactionClientContextKey> fullKey =
+            new AtomicReference<>(new ApiTransactionClientContextKey(
+                    new ApiClientContextKey(new ImmutableContext(), new ImmutableContext()),
+                    new ImmutableContext(), null));
 
     // you still need to merge the invocation context onto the result
     private EvaluationContext mergeEvaluationContext() {
-        var keyRef = key;
-        var currentKey = keyRef.get();
+        var currentKey = fullKey.get();
         EvaluationContext apiContext = openfeatureApi.getEvaluationContext();
         EvaluationContext clientContext = evaluationContext.get();
         EvaluationContext transactionContext = openfeatureApi.getTransactionContext();
-        var newKey = new ApiClientContextKey(apiContext, clientContext);
+        var newPartKey = new ApiClientContextKey(apiContext, clientContext);
+        var newKey = new ApiTransactionClientContextKey(newPartKey, transactionContext, currentKey.apiContextKey);
 
-        while (!key.compareAndSet(currentKey, newKey)) {
-            currentKey = keyRef.get();
+        while (!fullKey.compareAndSet(currentKey, newKey)) {
+            currentKey = fullKey.get();
             apiContext = openfeatureApi.getEvaluationContext();
             clientContext = evaluationContext.get();
             transactionContext = openfeatureApi.getTransactionContext();
-            newKey = new ApiClientContextKey(apiContext, clientContext);
+            newPartKey = new ApiClientContextKey(apiContext, clientContext);
+            newKey = new ApiTransactionClientContextKey(newPartKey, transactionContext, currentKey.apiContextKey);
         }
 
         return newKey.getMergedContext();
     }
 
-    class ApiTransactionClientContextKey{
+    /**
+     * Merge invocation contexts with API, transaction and client contexts.
+     * Does not merge before context.
+     *
+     * @param invocationContext invocation context
+     * @return merged evaluation context
+     */
+    private EvaluationContext mergeEvaluationContext(EvaluationContext invocationContext) {
+        final EvaluationContext apiContext = openfeatureApi.getEvaluationContext();
+        final EvaluationContext clientContext = evaluationContext.get();
+        final EvaluationContext transactionContext = openfeatureApi.getTransactionContext();
+        return mergeContextMaps(apiContext, transactionContext, clientContext, invocationContext);
+    }
+
+    class ApiTransactionClientContextKey {
         final ApiClientContextKey apiContextKey;
         final EvaluationContext transactionContext;
+        final ApiClientContextKey oldPartKey;
         volatile EvaluationContext mergedContext = null;
 
-        ApiTransactionClientContextKey(ApiClientContextKey apiContextKey, EvaluationContext transactionContext) {
+        ApiTransactionClientContextKey(
+                ApiClientContextKey apiContextKey,
+                EvaluationContext transactionContext,
+                ApiClientContextKey oldPartKey
+        ) {
             this.apiContextKey = apiContextKey;
             this.transactionContext = transactionContext;
+            this.oldPartKey = oldPartKey;
         }
 
         EvaluationContext getMergedContext() {
@@ -184,13 +208,68 @@ public class OpenFeatureClient implements Client {
                 // short circuit if it is already set
                 return currentMergedContext;
             }
-            // todo add merging that respects the merge order
-            var newMergedContext = mergeContextMaps(apiContextKey.getMergedContext(), transactionContext);
+
+            EvaluationContext newMergedContext = null;
+            if (oldPartKey == null) {
+                // no information about the previous contexts
+                newMergedContext = mergeContextMaps(
+                        apiContextKey.apiContext,
+                        transactionContext,
+                        apiContextKey.clientContext
+                );
+            } else {
+                if (oldPartKey.equals(apiContextKey) && oldPartKey.mergedContext != null) {
+                    // we can reuse the old context, if transaction context does not conflict with it
+                    var transactionMap = transactionContext.asUnmodifiableMap();
+                    var oldMergedContextMap = oldPartKey.mergedContext.asUnmodifiableMap();
+                    boolean conflict = false;
+                    for (var entry : transactionMap.entrySet()) {
+                        if (oldMergedContextMap.containsKey(entry.getKey())) {
+                            // we found a conflict and cannot reuse the old context
+                            conflict = true;
+                            newMergedContext = mergeContextMaps(
+                                    apiContextKey.apiContext,
+                                    transactionContext,
+                                    apiContextKey.clientContext
+                            );
+                            break;
+                        }
+                    }
+                    if (!conflict) {
+                        newMergedContext = mergeContextMaps(oldPartKey.mergedContext, transactionContext);
+                    }
+                } else {
+                    // api or client context changed, we cannot reuse old context data, recompute
+                    newMergedContext = mergeContextMaps(
+                            apiContextKey.apiContext,
+                            transactionContext,
+                            apiContextKey.clientContext
+                    );
+                }
+
+
+            }
+
             // if not set, compute it ourselves and set it.
             // We don't care if another thread sets it first, and we override it, it should have the same value
             mergedContext = newMergedContext;
             // even if another thread won, this is still the correct value as all contexts are final
             return newMergedContext;
+        }
+
+        @Override
+        public int hashCode() {
+            return apiContextKey.hashCode() + transactionContext.hashCode() + oldPartKey.hashCode();
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+            if (obj instanceof ApiTransactionClientContextKey) {
+                ApiTransactionClientContextKey other = (ApiTransactionClientContextKey) obj;
+                return apiContextKey == other.apiContextKey && transactionContext == other.transactionContext
+                        && oldPartKey == other.oldPartKey;
+            }
+            return false;
         }
     }
 
@@ -274,7 +353,7 @@ public class OpenFeatureClient implements Client {
                             type,
                             this.getMetadata(),
                             provider.getMetadata(),
-                            mergeEvaluationContext(ctx),
+                            mergeContextMaps(fullKey.get().getMergedContext(), ctx),
                             defaultValue),
                     mergedHooks,
                     hints);
@@ -340,19 +419,6 @@ public class OpenFeatureClient implements Client {
                 .track(trackingEventName, mergeEvaluationContext(context), details);
     }
 
-    /**
-     * Merge invocation contexts with API, transaction and client contexts.
-     * Does not merge before context.
-     *
-     * @param invocationContext invocation context
-     * @return merged evaluation context
-     */
-    private EvaluationContext mergeEvaluationContext(EvaluationContext invocationContext) {
-        final EvaluationContext apiContext = openfeatureApi.getEvaluationContext();
-        final EvaluationContext clientContext = evaluationContext.get();
-        final EvaluationContext transactionContext = openfeatureApi.getTransactionContext();
-        return mergeContextMaps(apiContext, transactionContext, clientContext, invocationContext);
-    }
 
     private EvaluationContext mergeContextMaps(EvaluationContext... contexts) {
         // avoid any unnecessary context instantiations and stream usage here; this is

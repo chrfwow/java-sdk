@@ -114,4 +114,8 @@ public class AllocationProfiler implements InternalProfiler {
         }
         return new AllocationTotals(totalInstances, totalBytes);
     }
+
+    public static void main(String[] args) {
+        new AllocationProfiler();
+    }
 }

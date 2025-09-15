@@ -119,7 +119,6 @@ public class OpenFeatureAPI implements EventBus<OpenFeatureAPI> {
      */
     public OpenFeatureAPI setEvaluationContext(EvaluationContext evaluationContext) {
         this.evaluationContext.set(evaluationContext);
-        setTransactionContext();
         return this;
     }
 
