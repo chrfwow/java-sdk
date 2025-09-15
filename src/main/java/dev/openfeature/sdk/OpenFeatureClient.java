@@ -153,8 +153,13 @@ public class OpenFeatureClient implements Client {
         var keyRef = key;
         var currentKey = keyRef.get();
         EvaluationContext apiContext = openfeatureApi.getEvaluationContext();
-        EvaluationContext clientContext = evaluationContext.get();
         EvaluationContext transactionContext = openfeatureApi.getTransactionContext();
+        EvaluationContext clientContext = evaluationContext.get();
+
+        if (currentKey.equals(apiContext, transactionContext, clientContext)) {
+            return currentKey.merge();
+        }
+
         ContextKey newKey = new ContextKey(apiContext, clientContext, transactionContext);
 
         while (!key.compareAndSet(currentKey, newKey)) {
@@ -165,7 +170,7 @@ public class OpenFeatureClient implements Client {
             newKey = new ContextKey(apiContext, clientContext, transactionContext);
         }
 
-        return newKey.merge();
+        return key.get().merge();
     }
 
     class ContextKey {
@@ -207,6 +212,13 @@ public class OpenFeatureClient implements Client {
             return apiContext == ck.apiContext
                     && transactionContext == ck.transactionContext
                     && clientContext == ck.clientContext;
+        }
+
+        public boolean equals(EvaluationContext apiContext, EvaluationContext transactionContext,
+                EvaluationContext clientContext) {
+            return apiContext == this.apiContext
+                    && transactionContext == this.transactionContext
+                    && clientContext == this.clientContext;
         }
 
         @Override

@@ -18,6 +18,7 @@ import dev.openfeature.sdk.Value;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
+import org.junit.jupiter.api.Test;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
 import org.openjdk.jmh.annotations.Fork;
@@ -71,6 +72,7 @@ public class AllocationBenchmark {
     @Benchmark
     @BenchmarkMode(Mode.SingleShotTime)
     @Fork(jvmArgsAppend = {"-Xmx1024m", "-XX:+UnlockExperimentalVMOptions", "-XX:+UseEpsilonGC"})
+    @Test
     public void context() {
 
         OpenFeatureAPI.getInstance().setProviderAndWait(new NoOpProvider());
