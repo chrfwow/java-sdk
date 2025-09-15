@@ -157,6 +157,11 @@ public class OpenFeatureClient implements Client {
         EvaluationContext apiContext = openfeatureApi.getEvaluationContext();
         EvaluationContext clientContext = evaluationContext.get();
         EvaluationContext transactionContext = openfeatureApi.getTransactionContext();
+
+        if (currentKey.equals(apiContext, transactionContext, clientContext)) {
+            return currentKey.getMergedContext();
+        }
+
         var newPartKey = new ApiClientContextKey(apiContext, clientContext);
         var newKey = new ApiTransactionClientContextKey(newPartKey, transactionContext, currentKey.apiContextKey);
 
@@ -169,7 +174,7 @@ public class OpenFeatureClient implements Client {
             newKey = new ApiTransactionClientContextKey(newPartKey, transactionContext, currentKey.apiContextKey);
         }
 
-        return newKey.getMergedContext();
+        return fullKey.get().getMergedContext();
     }
 
 
@@ -258,6 +263,12 @@ public class OpenFeatureClient implements Client {
             }
             return false;
         }
+
+        public boolean equals(EvaluationContext apiContext, EvaluationContext transactionContext,
+                EvaluationContext clientContext) {
+            return this.apiContextKey.equals(apiContext, clientContext)
+                    && transactionContext == this.transactionContext;
+        }
     }
 
     class ApiClientContextKey {
@@ -294,6 +305,10 @@ public class OpenFeatureClient implements Client {
             }
             final ApiClientContextKey ck = (ApiClientContextKey) other;
             return apiContext == ck.apiContext && clientContext == ck.clientContext;
+        }
+
+        public boolean equals(EvaluationContext apiContext, EvaluationContext clientContext) {
+            return this.apiContext == apiContext && clientContext == this.clientContext;
         }
 
         @Override

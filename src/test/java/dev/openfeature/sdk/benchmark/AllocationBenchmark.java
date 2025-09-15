@@ -14,10 +14,12 @@ import dev.openfeature.sdk.ImmutableContext;
 import dev.openfeature.sdk.ImmutableStructure;
 import dev.openfeature.sdk.NoOpProvider;
 import dev.openfeature.sdk.OpenFeatureAPI;
+import dev.openfeature.sdk.ThreadLocalTransactionContextPropagator;
 import dev.openfeature.sdk.Value;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
+import org.junit.jupiter.api.Test;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
 import org.openjdk.jmh.annotations.Fork;
@@ -71,9 +73,11 @@ public class AllocationBenchmark {
     @Benchmark
     @BenchmarkMode(Mode.SingleShotTime)
     @Fork(jvmArgsAppend = {"-Xmx1024m", "-XX:+UnlockExperimentalVMOptions", "-XX:+UseEpsilonGC"})
+    @Test
     public void context() {
 
         OpenFeatureAPI.getInstance().setProviderAndWait(new NoOpProvider());
+        OpenFeatureAPI.getInstance().setTransactionContextPropagator(new ThreadLocalTransactionContextPropagator());
         Map<String, Value> globalAttrs = new HashMap<>();
         globalAttrs.put("global", new Value(1));
         EvaluationContext globalContext = new ImmutableContext(globalAttrs);
