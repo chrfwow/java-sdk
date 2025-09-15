@@ -146,7 +146,9 @@ public class OpenFeatureClient implements Client {
     }
 
 
-    private final AtomicReference<ContextKey> key = new AtomicReference<>();
+    private final AtomicReference<ContextKey> key =
+            new AtomicReference<>(
+                    new ContextKey(new ImmutableContext(), new ImmutableContext(), new ImmutableContext()));
 
     // you still need to merge the invocation context onto the result
     private EvaluationContext mergeEvaluationContext() {
@@ -160,14 +162,14 @@ public class OpenFeatureClient implements Client {
             return currentKey.merge();
         }
 
-        ContextKey newKey = new ContextKey(apiContext, clientContext, transactionContext);
+        ContextKey newKey = new ContextKey(apiContext, transactionContext, clientContext);
 
         while (!key.compareAndSet(currentKey, newKey)) {
             currentKey = keyRef.get();
             apiContext = openfeatureApi.getEvaluationContext();
-            clientContext = evaluationContext.get();
             transactionContext = openfeatureApi.getTransactionContext();
-            newKey = new ContextKey(apiContext, clientContext, transactionContext);
+            clientContext = evaluationContext.get();
+            newKey = new ContextKey(apiContext, transactionContext, clientContext);
         }
 
         return key.get().merge();
