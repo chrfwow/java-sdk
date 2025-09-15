@@ -30,11 +30,11 @@ import lombok.extern.slf4j.Slf4j;
  */
 @Slf4j
 @SuppressWarnings({
-    "PMD.DataflowAnomalyAnalysis",
-    "PMD.BeanMembersShouldSerialize",
-    "PMD.UnusedLocalVariable",
-    "unchecked",
-    "rawtypes"
+        "PMD.DataflowAnomalyAnalysis",
+        "PMD.BeanMembersShouldSerialize",
+        "PMD.UnusedLocalVariable",
+        "unchecked",
+        "rawtypes"
 })
 @Deprecated() // TODO: eventually we will make this non-public. See issue #872
 public class OpenFeatureClient implements Client {
@@ -143,6 +143,97 @@ public class OpenFeatureClient implements Client {
     public OpenFeatureClient setEvaluationContext(EvaluationContext evaluationContext) {
         this.evaluationContext.set(evaluationContext);
         return this;
+    }
+
+
+    private final AtomicReference<ApiClientContextKey> key = new AtomicReference<>();
+
+    // you still need to merge the invocation context onto the result
+    private EvaluationContext mergeEvaluationContext() {
+        var keyRef = key;
+        var currentKey = keyRef.get();
+        EvaluationContext apiContext = openfeatureApi.getEvaluationContext();
+        EvaluationContext clientContext = evaluationContext.get();
+        EvaluationContext transactionContext = openfeatureApi.getTransactionContext();
+        var newKey = new ApiClientContextKey(apiContext, clientContext);
+
+        while (!key.compareAndSet(currentKey, newKey)) {
+            currentKey = keyRef.get();
+            apiContext = openfeatureApi.getEvaluationContext();
+            clientContext = evaluationContext.get();
+            transactionContext = openfeatureApi.getTransactionContext();
+            newKey = new ApiClientContextKey(apiContext, clientContext);
+        }
+
+        return newKey.getMergedContext();
+    }
+
+    class ApiTransactionClientContextKey{
+        final ApiClientContextKey apiContextKey;
+        final EvaluationContext transactionContext;
+        volatile EvaluationContext mergedContext = null;
+
+        ApiTransactionClientContextKey(ApiClientContextKey apiContextKey, EvaluationContext transactionContext) {
+            this.apiContextKey = apiContextKey;
+            this.transactionContext = transactionContext;
+        }
+
+        EvaluationContext getMergedContext() {
+            final var currentMergedContext = mergedContext;
+            if (currentMergedContext != null) {
+                // short circuit if it is already set
+                return currentMergedContext;
+            }
+            // todo add merging that respects the merge order
+            var newMergedContext = mergeContextMaps(apiContextKey.getMergedContext(), transactionContext);
+            // if not set, compute it ourselves and set it.
+            // We don't care if another thread sets it first, and we override it, it should have the same value
+            mergedContext = newMergedContext;
+            // even if another thread won, this is still the correct value as all contexts are final
+            return newMergedContext;
+        }
+    }
+
+    class ApiClientContextKey {
+        final EvaluationContext apiContext;
+        final EvaluationContext clientContext;
+        volatile EvaluationContext mergedContext = null;
+
+        ApiClientContextKey(
+                EvaluationContext apiContext,
+                EvaluationContext clientContext
+        ) {
+            this.apiContext = apiContext;
+            this.clientContext = clientContext;
+        }
+
+        EvaluationContext getMergedContext() {
+            final var currentMergedContext = mergedContext;
+            if (currentMergedContext != null) {
+                // short circuit if it is already set
+                return currentMergedContext;
+            }
+            var newMergedContext = mergeContextMaps(apiContext, clientContext);
+            // if not set, compute it ourselves and set it.
+            // We don't care if another thread sets it first, and we override it, it should have the same value
+            mergedContext = newMergedContext;
+            // even if another thread won, this is still the correct value as all contexts are final
+            return newMergedContext;
+        }
+
+        @Override
+        public boolean equals(Object other) {
+            if (!(other instanceof ApiClientContextKey)) {
+                return false;
+            }
+            final ApiClientContextKey ck = (ApiClientContextKey) other;
+            return apiContext == ck.apiContext && clientContext == ck.clientContext;
+        }
+
+        @Override
+        public int hashCode() {
+            return apiContext.hashCode() + clientContext.hashCode();
+        }
     }
 
     /**
