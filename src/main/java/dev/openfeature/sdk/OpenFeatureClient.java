@@ -116,7 +116,7 @@ public class OpenFeatureClient implements Client {
         validateTrackingEventName(trackingEventName);
         Objects.requireNonNull(context);
         Objects.requireNonNull(details);
-        invokeTrack(trackingEventName, mergeEvaluationContext(context), details);
+        invokeTrack(trackingEventName, mergeContextMaps(mergeEvaluationContext(), context), details);
     }
 
     /**
@@ -172,19 +172,6 @@ public class OpenFeatureClient implements Client {
         return newKey.getMergedContext();
     }
 
-    /**
-     * Merge invocation contexts with API, transaction and client contexts.
-     * Does not merge before context.
-     *
-     * @param invocationContext invocation context
-     * @return merged evaluation context
-     */
-    private EvaluationContext mergeEvaluationContext(EvaluationContext invocationContext) {
-        final EvaluationContext apiContext = openfeatureApi.getEvaluationContext();
-        final EvaluationContext clientContext = evaluationContext.get();
-        final EvaluationContext transactionContext = openfeatureApi.getTransactionContext();
-        return mergeContextMaps(apiContext, transactionContext, clientContext, invocationContext);
-    }
 
     class ApiTransactionClientContextKey {
         final ApiClientContextKey apiContextKey;
@@ -353,7 +340,7 @@ public class OpenFeatureClient implements Client {
                             type,
                             this.getMetadata(),
                             provider.getMetadata(),
-                            mergeContextMaps(fullKey.get().getMergedContext(), ctx),
+                            mergeContextMaps(mergeEvaluationContext(), ctx),
                             defaultValue),
                     mergedHooks,
                     hints);
@@ -416,7 +403,7 @@ public class OpenFeatureClient implements Client {
         openfeatureApi
                 .getFeatureProviderStateManager(domain)
                 .getProvider()
-                .track(trackingEventName, mergeEvaluationContext(context), details);
+                .track(trackingEventName, mergeContextMaps(mergeEvaluationContext(), context), details);
     }
 
 
