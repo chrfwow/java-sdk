@@ -30,11 +30,11 @@ import lombok.extern.slf4j.Slf4j;
  */
 @Slf4j
 @SuppressWarnings({
-    "PMD.DataflowAnomalyAnalysis",
-    "PMD.BeanMembersShouldSerialize",
-    "PMD.UnusedLocalVariable",
-    "unchecked",
-    "rawtypes"
+        "PMD.DataflowAnomalyAnalysis",
+        "PMD.BeanMembersShouldSerialize",
+        "PMD.UnusedLocalVariable",
+        "unchecked",
+        "rawtypes"
 })
 @Deprecated() // TODO: eventually we will make this non-public. See issue #872
 public class OpenFeatureClient implements Client {
@@ -159,7 +159,7 @@ public class OpenFeatureClient implements Client {
         EvaluationContext clientContext = evaluationContext.get();
 
         if (currentKey.equals(apiContext, transactionContext, clientContext)) {
-            return currentKey.merge();
+            return currentKey.getMergedContext();
         }
 
         ContextKey newKey = new ContextKey(apiContext, transactionContext, clientContext);
@@ -172,7 +172,7 @@ public class OpenFeatureClient implements Client {
             newKey = new ContextKey(apiContext, transactionContext, clientContext);
         }
 
-        return key.get().merge();
+        return key.get().getMergedContext();
     }
 
     class ContextKey {
@@ -191,7 +191,7 @@ public class OpenFeatureClient implements Client {
             this.clientContext = clientContext;
         }
 
-        EvaluationContext merge() {
+        EvaluationContext getMergedContext() {
             final var currentMergedContext = mergedContext;
             if (currentMergedContext != null) {
                 // short circuit if it is already set
@@ -225,7 +225,9 @@ public class OpenFeatureClient implements Client {
 
         @Override
         public int hashCode() {
-            return apiContext.hashCode() + transactionContext.hashCode() + clientContext.hashCode();
+            return (apiContext == null ? 0 : apiContext.hashCode()) +
+                    (transactionContext == null ? 0 : transactionContext.hashCode()) +
+                    (clientContext == null ? 0 : clientContext.hashCode());
         }
     }
 
