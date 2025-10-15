@@ -17,8 +17,8 @@ import dev.openfeature.sdk.IntegerHook;
 import dev.openfeature.sdk.NoOpProvider;
 import dev.openfeature.sdk.ObjectHook;
 import dev.openfeature.sdk.OpenFeatureAPI;
-import dev.openfeature.sdk.ThreadLocalTransactionContextPropagator;
 import dev.openfeature.sdk.StringHook;
+import dev.openfeature.sdk.ThreadLocalTransactionContextPropagator;
 import dev.openfeature.sdk.Value;
 import java.util.HashMap;
 import java.util.Map;
@@ -38,9 +38,9 @@ public class AllocationBenchmark {
     // 10K iterations works well with Xmx1024m (we don't want to run out of memory)
     private static final int ITERATIONS = 10000;
 
-    //@Benchmark
-    //@BenchmarkMode(Mode.SingleShotTime)
-    //@Fork(jvmArgsAppend = {"-Xmx1024m", "-XX:+UnlockExperimentalVMOptions", "-XX:+UseEpsilonGC"})
+    // @Benchmark
+    // @BenchmarkMode(Mode.SingleShotTime)
+    // @Fork(jvmArgsAppend = {"-Xmx1024m", "-XX:+UnlockExperimentalVMOptions", "-XX:+UseEpsilonGC"})
     public void run() {
 
         OpenFeatureAPI.getInstance().setProviderAndWait(new NoOpProvider());

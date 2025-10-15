@@ -10,9 +10,7 @@ import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicReference;
@@ -48,9 +46,9 @@ public class OpenFeatureClient implements Client {
     private final String version;
 
     private final ConcurrentLinkedQueue<Hook> clientHooks;
-    private final AtomicReference<EvaluationContext> evaluationContext = new AtomicReference<>();
-
+    private final ContextCacher contextCacher;
     private final HookSupport hookSupport;
+    private final AtomicReference<EvaluationContext> evaluationContext = new AtomicReference<>();
 
     /**
      * Deprecated public constructor. Use OpenFeature.API.getClient() instead.
@@ -70,6 +68,7 @@ public class OpenFeatureClient implements Client {
         this.version = version;
         this.hookSupport = new HookSupport();
         this.clientHooks = new ConcurrentLinkedQueue<>();
+        this.contextCacher = new ContextCacher(this, openFeatureAPI);
     }
 
     /**
@@ -117,7 +116,10 @@ public class OpenFeatureClient implements Client {
         validateTrackingEventName(trackingEventName);
         Objects.requireNonNull(context);
         Objects.requireNonNull(details);
-        invokeTrack(trackingEventName, mergeContextMaps(mergeEvaluationContext(), context), details);
+        invokeTrack(
+                trackingEventName,
+                EvaluationContextMerge.mergeContextMaps(contextCacher.getMergedEvaluationContext(), context),
+                details);
     }
 
     /**
@@ -144,92 +146,6 @@ public class OpenFeatureClient implements Client {
     public OpenFeatureClient setEvaluationContext(EvaluationContext evaluationContext) {
         this.evaluationContext.set(evaluationContext);
         return this;
-    }
-
-
-    private final AtomicReference<ContextKey> key =
-            new AtomicReference<>(
-                    new ContextKey(new ImmutableContext(), new ImmutableContext(), new ImmutableContext()));
-
-    // you still need to merge the invocation context onto the result
-    private EvaluationContext mergeEvaluationContext() {
-        var keyRef = key;
-        var currentKey = keyRef.get();
-        EvaluationContext apiContext = openfeatureApi.getEvaluationContext();
-        EvaluationContext transactionContext = openfeatureApi.getTransactionContext();
-        EvaluationContext clientContext = evaluationContext.get();
-
-        if (currentKey.equals(apiContext, transactionContext, clientContext)) {
-            return currentKey.getMergedContext();
-        }
-
-        ContextKey newKey = new ContextKey(apiContext, transactionContext, clientContext);
-
-        while (!key.compareAndSet(currentKey, newKey)) {
-            currentKey = keyRef.get();
-            apiContext = openfeatureApi.getEvaluationContext();
-            transactionContext = openfeatureApi.getTransactionContext();
-            clientContext = evaluationContext.get();
-            newKey = new ContextKey(apiContext, transactionContext, clientContext);
-        }
-
-        return key.get().getMergedContext();
-    }
-
-    class ContextKey {
-        final EvaluationContext apiContext;
-        final EvaluationContext transactionContext;
-        final EvaluationContext clientContext;
-        volatile EvaluationContext mergedContext = null;
-
-        ContextKey(
-                EvaluationContext apiContext,
-                EvaluationContext transactionContext,
-                EvaluationContext clientContext
-        ) {
-            this.apiContext = apiContext;
-            this.transactionContext = transactionContext;
-            this.clientContext = clientContext;
-        }
-
-        EvaluationContext getMergedContext() {
-            final var currentMergedContext = mergedContext;
-            if (currentMergedContext != null) {
-                // short circuit if it is already set
-                return currentMergedContext;
-            }
-            var newMergedContext = mergeContextMaps(apiContext, transactionContext, clientContext);
-            // if not set, compute it ourselves and set it.
-            // We don't care if another thread sets it first, and we override it, it should have the same value
-            mergedContext = newMergedContext;
-            // even if another thread won, this is still the correct value as all contexts are final
-            return newMergedContext;
-        }
-
-        @Override
-        public boolean equals(Object other) {
-            if (!(other instanceof ContextKey)) {
-                return false;
-            }
-            final ContextKey ck = (ContextKey) other;
-            return apiContext == ck.apiContext
-                    && transactionContext == ck.transactionContext
-                    && clientContext == ck.clientContext;
-        }
-
-        public boolean equals(EvaluationContext apiContext, EvaluationContext transactionContext,
-                EvaluationContext clientContext) {
-            return apiContext == this.apiContext
-                    && transactionContext == this.transactionContext
-                    && clientContext == this.clientContext;
-        }
-
-        @Override
-        public int hashCode() {
-            return (apiContext == null ? 0 : apiContext.hashCode()) +
-                    (transactionContext == null ? 0 : transactionContext.hashCode()) +
-                    (clientContext == null ? 0 : clientContext.hashCode());
-        }
     }
 
     /**
@@ -268,7 +184,7 @@ public class OpenFeatureClient implements Client {
                     new SharedHookContext(key, type, this.getMetadata(), provider.getMetadata(), defaultValue);
             hookSupport.setHookContexts(hookSupportData, sharedHookContext);
 
-            var evalContext = mergeEvaluationContext(ctx);
+            var evalContext = EvaluationContextMerge.mergeContextMaps(contextCacher.getMergedEvaluationContext(), ctx);
             hookSupport.updateEvaluationContext(hookSupportData, evalContext);
 
             hookSupport.executeBeforeHooks(hookSupportData);
@@ -332,20 +248,10 @@ public class OpenFeatureClient implements Client {
         openfeatureApi
                 .getFeatureProviderStateManager(domain)
                 .getProvider()
-                .track(trackingEventName, mergeContextMaps(mergeEvaluationContext(), context), details);
-    }
-
-
-    private EvaluationContext mergeContextMaps(EvaluationContext... contexts) {
-        // avoid any unnecessary context instantiations and stream usage here; this is
-        // called with every evaluation.
-        Map merged = new HashMap<>();
-        for (EvaluationContext evaluationContext : contexts) {
-            if (evaluationContext != null && !evaluationContext.isEmpty()) {
-                EvaluationContext.mergeMaps(ImmutableStructure::new, merged, evaluationContext.asUnmodifiableMap());
-            }
-        }
-        return new ImmutableContext(merged);
+                .track(
+                        trackingEventName,
+                        EvaluationContextMerge.mergeContextMaps(contextCacher.getMergedEvaluationContext(), context),
+                        details);
     }
 
     private <T> ProviderEvaluation<?> createProviderEvaluation(
