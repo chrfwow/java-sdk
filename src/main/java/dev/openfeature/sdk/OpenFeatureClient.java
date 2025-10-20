@@ -10,9 +10,7 @@ import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicReference;
@@ -48,10 +46,9 @@ public class OpenFeatureClient implements Client {
     private final String version;
 
     private final ConcurrentLinkedQueue<Hook> clientHooks;
-    private final AtomicReference<EvaluationContext> evaluationContext = new AtomicReference<>();
-
-    private final HookSupport hookSupport;
     private final ContextCacher contextCacher;
+    private final HookSupport hookSupport;
+    private final AtomicReference<EvaluationContext> evaluationContext = new AtomicReference<>();
 
     /**
      * Deprecated public constructor. Use OpenFeature.API.getClient() instead.
@@ -119,7 +116,10 @@ public class OpenFeatureClient implements Client {
         validateTrackingEventName(trackingEventName);
         Objects.requireNonNull(context);
         Objects.requireNonNull(details);
-        invokeTrack(trackingEventName, mergeContextMaps(contextCacher.mergeEvaluationContext(), context), details);
+        invokeTrack(
+                trackingEventName,
+                EvaluationContextMerge.mergeContextMaps(contextCacher.getMergedEvaluationContext(), context),
+                details);
     }
 
     /**
@@ -184,7 +184,7 @@ public class OpenFeatureClient implements Client {
                     new SharedHookContext(key, type, this.getMetadata(), provider.getMetadata(), defaultValue);
             hookSupport.setHookContexts(hookSupportData, sharedHookContext);
 
-            var evalContext = mergeEvaluationContext(ctx);
+            var evalContext = EvaluationContextMerge.mergeContextMaps(contextCacher.getMergedEvaluationContext(), ctx);
             hookSupport.updateEvaluationContext(hookSupportData, evalContext);
 
             hookSupport.executeBeforeHooks(hookSupportData);
@@ -248,19 +248,10 @@ public class OpenFeatureClient implements Client {
         openfeatureApi
                 .getFeatureProviderStateManager(domain)
                 .getProvider()
-                .track(trackingEventName, mergeContextMaps(contextCacher.mergeEvaluationContext(), context), details);
-    }
-
-    private EvaluationContext mergeContextMaps(EvaluationContext... contexts) {
-        // avoid any unnecessary context instantiations and stream usage here; this is
-        // called with every evaluation.
-        Map merged = new HashMap<>();
-        for (EvaluationContext evaluationContext : contexts) {
-            if (evaluationContext != null && !evaluationContext.isEmpty()) {
-                EvaluationContext.mergeMaps(ImmutableStructure::new, merged, evaluationContext.asUnmodifiableMap());
-            }
-        }
-        return new ImmutableContext(merged);
+                .track(
+                        trackingEventName,
+                        EvaluationContextMerge.mergeContextMaps(contextCacher.getMergedEvaluationContext(), context),
+                        details);
     }
 
     private <T> ProviderEvaluation<?> createProviderEvaluation(

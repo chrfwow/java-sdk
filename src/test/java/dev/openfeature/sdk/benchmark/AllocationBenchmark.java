@@ -106,6 +106,7 @@ public class AllocationBenchmark {
 
         OpenFeatureAPI.getInstance().setProviderAndWait(new NoOpProvider());
         OpenFeatureAPI.getInstance().setTransactionContextPropagator(new ThreadLocalTransactionContextPropagator());
+
         Map<String, Value> globalAttrs = new HashMap<>();
         globalAttrs.put("global", new Value(1));
         EvaluationContext globalContext = new ImmutableContext(globalAttrs);

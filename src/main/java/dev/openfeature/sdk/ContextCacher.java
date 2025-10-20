@@ -18,7 +18,7 @@ class ContextCacher {
     }
 
     // you still need to merge the invocation context onto the result
-    EvaluationContext mergeEvaluationContext() {
+    EvaluationContext getMergedEvaluationContext() {
         var currentKey = fullKey.get();
         EvaluationContext apiContext = openfeatureApi.getEvaluationContext();
         EvaluationContext clientContext = client.getEvaluationContext();
