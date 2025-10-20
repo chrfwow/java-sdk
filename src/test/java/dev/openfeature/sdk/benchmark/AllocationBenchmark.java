@@ -34,9 +34,9 @@ public class AllocationBenchmark {
     // 10K iterations works well with Xmx1024m (we don't want to run out of memory)
     private static final int ITERATIONS = 10000;
 
-    //@Benchmark
-    //@BenchmarkMode(Mode.SingleShotTime)
-    //@Fork(jvmArgsAppend = {"-Xmx1024m", "-XX:+UnlockExperimentalVMOptions", "-XX:+UseEpsilonGC"})
+    // @Benchmark
+    // @BenchmarkMode(Mode.SingleShotTime)
+    // @Fork(jvmArgsAppend = {"-Xmx1024m", "-XX:+UnlockExperimentalVMOptions", "-XX:+UseEpsilonGC"})
     public void run() {
 
         OpenFeatureAPI.getInstance().setProviderAndWait(new NoOpProvider());
