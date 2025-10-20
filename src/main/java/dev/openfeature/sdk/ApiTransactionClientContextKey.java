@@ -46,8 +46,31 @@ class ApiTransactionClientContextKey {
                 }
             } else {
                 // api or client context changed, we cannot reuse old context data, recompute
-                newMergedContext = EvaluationContextMerge.mergeContextMaps(
-                        apiContextKey.apiContext, transactionContext, apiContextKey.clientContext);
+
+                var transactionMap = transactionContext.asUnmodifiableMap();
+                var clientContextMap = apiContextKey.clientContext.asUnmodifiableMap();
+                boolean conflict = false;
+                for (var entry : transactionMap.entrySet()) {
+                    if (clientContextMap.containsKey(entry.getKey())) {
+                        // we found a conflict and cannot reuse the old context
+                        conflict = true;
+                        break;
+                    }
+                }
+
+                if (conflict) {
+                    // transaction context will override client context, so we need merge everything per the spec
+                    newMergedContext = EvaluationContextMerge.mergeContextMaps(
+                            apiContextKey.apiContext, transactionContext, apiContextKey.clientContext);
+                } else {
+                    // transaction context will NOT override client context, so we can cache the api/client context
+                    // and merge transaction context on top of it. This way, the api/client context can be cached for
+                    // the next transaction update
+                    newMergedContext = EvaluationContextMerge.mergeContextMaps(
+                            apiContextKey.getMergedContext(), transactionContext
+                    );
+                }
+
             }
         }
 
